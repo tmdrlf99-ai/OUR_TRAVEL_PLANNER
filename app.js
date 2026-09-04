@@ -1429,7 +1429,11 @@ function renderBudget(){
  $$("#budgetTable [data-budget]").forEach(el=>el.onclick=()=>editBudget(Number(el.dataset.budget)));
 }
 budgetTripSelect.onchange=renderBudget;
-function fillEditTripSelects(){const o='<option value="">미지정</option>'+[...trips].sort(chronological).map(x=>`<option value="${x.id}">${esc(x.title)}</option>`).join("");eventTripEdit.innerHTML=o;budgetTripEdit.innerHTML=o}
+function fillEditTripSelects(){
+ const rows=[...trips].sort(chronological).map(x=>`<option value="${x.id}">${esc(x.title)}</option>`).join("");
+ eventTripEdit.innerHTML='<option value="">자동 생성 · 이 일정으로 새 여행 만들기</option>'+rows;
+ budgetTripEdit.innerHTML='<option value="">미지정</option>'+rows;
+}
 
 /* 여행 CRUD */
 function resetTripForm(){
@@ -1480,6 +1484,128 @@ tripFormPublic.onsubmit=async e=>{
 deleteTripBtn.onclick=async()=>{
  const id=Number(tripEditId.value);if(!id||!confirm("이 여행과 연결된 일정·예산까지 삭제될 수 있습니다. 정말 삭제하시겠습니까?"))return;
  try{if(id>0)await apiData("travel_trips","DELETE",null,id);localDelete("trips",id);closeModal("tripModal");toast("여행이 삭제·동기화되었습니다.");await loadAll()}catch(err){showFormError("tripFormPublic",err)}
+}
+
+
+function textHasLocation(text,value){
+ const hay=normalizeLocationSearch(text);
+ const needle=normalizeLocationSearch(value);
+ return Boolean(needle&&hay.includes(needle));
+}
+function inferTripLocationFromEvent(title,description){
+ const text=`${title||""} ${description||""}`.trim();
+
+ // 국내 시·군·구를 우선 탐색하고 해당 상위 시·도를 찾습니다.
+ let domestic=null;
+ for(const [region,cities] of Object.entries(KR_REGION_CITIES)){
+   for(const city of cities){
+     if(textHasLocation(text,city)){
+       domestic={trip_type:"국내",region,city:METRO_REGIONS.has(region)&&city===`${region}시`?"":city,country:"대한민국"};
+       break;
+     }
+   }
+   if(domestic)break;
+ }
+ if(!domestic){
+   for(const region of Object.keys(KR_REGION_CITIES)){
+     if(textHasLocation(text,region)||textHasLocation(text,regionLabel(region))){
+       domestic={trip_type:"국내",region,city:"",country:"대한민국"};
+       break;
+     }
+   }
+ }
+ if(domestic)return domestic;
+
+ // 해외 도시는 국가명보다 먼저 탐색합니다.
+ for(const [country,cities] of Object.entries(WORLD_COUNTRY_CITIES||{})){
+   for(const city of cities||[]){
+     if(city&&textHasLocation(text,city)){
+       return {trip_type:"해외",region:"",city,country};
+     }
+   }
+ }
+ for(const row of WORLD_COUNTRY_DIRECTORY){
+   const keys=[row.name,row.en,...(row.aliases||[])].filter(Boolean);
+   if(keys.some(k=>textHasLocation(text,k))){
+     return {trip_type:"해외",region:"",city:"",country:row.name};
+   }
+ }
+
+ // 위치를 특정할 수 없는 경우에도 3개 화면 연동은 유지합니다.
+ return {trip_type:"국내",region:"",city:"",country:"대한민국"};
+}
+async function createCalendarAutoTrip(dates,eventPayload){
+ const ordered=[...new Set(dates)].filter(Boolean).sort();
+ if(!ordered.length)throw new Error("여행 날짜가 없습니다.");
+ const today=fmt(new Date());
+ const loc=inferTripLocationFromEvent(eventPayload.title,eventPayload.description);
+ const start=ordered[0],end=ordered.at(-1);
+ const allPast=end<today;
+ const payload={
+   trip_type:loc.trip_type,
+   status:allPast?"완료":"예정",
+   title:eventPayload.title||"여행 일정",
+   start_date:start,
+   end_date:end,
+   region:loc.region||"",
+   city:loc.city||"",
+   country:loc.country||(loc.trip_type==="국내"?"대한민국":""),
+   memo:[eventPayload.description||"","여행 달력에서 자동 생성"].filter(Boolean).join("\n"),
+   author_name:eventPayload.author_name||"",
+   is_visible:true,
+   source_kind:"calendar_auto",
+   updated_at:new Date().toISOString()
+ };
+ const saved=await apiData("travel_trips","POST",payload);
+ if(!saved)throw new Error("연결 여행 자동 생성에 실패했습니다.");
+ localUpsert("trips",saved);
+ trips.unshift(saved);
+ return saved;
+}
+function isCalendarAutoTrip(trip){
+ return Boolean(trip&&String(trip.source_kind||"")==="calendar_auto");
+}
+async function updateCalendarAutoTrip(trip,dates,eventPayload){
+ if(!isCalendarAutoTrip(trip)||Number(trip.id)<=0)return trip;
+ const ordered=[...new Set(dates)].filter(Boolean).sort();
+ if(!ordered.length)return trip;
+ const today=fmt(new Date());
+ const inferred=inferTripLocationFromEvent(eventPayload.title,eventPayload.description);
+ const keepDomestic=trip.trip_type==="국내"&&(trip.region||trip.city);
+ const keepOverseas=trip.trip_type==="해외"&&(trip.country||trip.city);
+ const loc=(keepDomestic||keepOverseas)
+   ? {trip_type:trip.trip_type,region:trip.region||"",city:trip.city||"",country:trip.country||""}
+   : inferred;
+ const payload={
+   ...trip,
+   trip_type:loc.trip_type,
+   status:ordered.at(-1)<today?"완료":"예정",
+   title:eventPayload.title||trip.title,
+   start_date:ordered[0],
+   end_date:ordered.at(-1),
+   region:loc.region||"",
+   city:loc.city||"",
+   country:loc.country||(loc.trip_type==="국내"?"대한민국":""),
+   memo:eventPayload.description||trip.memo||"",
+   author_name:eventPayload.author_name||trip.author_name||"",
+   source_kind:"calendar_auto",
+   updated_at:new Date().toISOString()
+ };
+ const saved=await apiData("travel_trips","PUT",payload,trip.id);
+ if(saved){localUpsert("trips",saved);Object.assign(trip,saved);return saved}
+ return trip;
+}
+async function deleteCalendarAutoTripIfUnused(tripId,excludingEventId=null){
+ const trip=trips.find(t=>Number(t.id)===Number(tripId));
+ if(!isCalendarAutoTrip(trip)||Number(trip.id)<=0)return;
+ const other=events.some(ev=>Number(ev.trip_id)===Number(tripId)&&Number(ev.id)!==Number(excludingEventId));
+ if(other)return;
+ const linkedPlaces=places.filter(p=>Number(p.source_trip_id)===Number(tripId)&&Number(p.id)>0);
+ for(const p of linkedPlaces){
+   try{await apiData("travel_places","DELETE",null,p.id);localDelete("places",p.id)}catch(err){console.warn("자동 여행 방문지 삭제 실패",err)}
+ }
+ await apiData("travel_trips","DELETE",null,trip.id);
+ localDelete("trips",trip.id);
 }
 
 async function syncCalendarEventToTravelRecords(tripId,dates,eventPayload){
@@ -1538,9 +1664,10 @@ function resetEventForm(){
  const baseDate=picked[0]||fmt(new Date());
  eventDateEdit.value=baseDate;
  eventEndDateEdit.value=picked.at(-1)||baseDate;
- // 선택 날짜와 겹치는 여행이 하나뿐이면 자동 연결합니다.
+ // 선택 날짜와 겹치는 여행이 하나뿐이면 자동 연결하고,
+ // 없으면 '자동 생성' 상태로 둡니다.
  const matchingTrips=trips.filter(x=>picked.some(d=>tripOnDate(x,d)));
- if(matchingTrips.length===1)eventTripEdit.value=String(matchingTrips[0].id);
+ eventTripEdit.value=matchingTrips.length===1?String(matchingTrips[0].id):"";
 }
 function newEvent(){resetEventForm();openModal("eventModal")}
 function editEvent(id){
@@ -1560,14 +1687,16 @@ function editEvent(id){
 }
 eventFormPublic.onsubmit=async e=>{
  e.preventDefault();clearFormError("eventFormPublic");
- const existing=eventEditId.value;const id=existing?Number(existing):null;
- const tripId=eventTripEdit.value?Number(eventTripEdit.value):null;
- if(!existing&&!tripId){showFormError("eventFormPublic","지역별 일정/방문지 자동 반영을 위해 연결 여행을 선택해 주세요.");return;}
+ const existing=eventEditId.value;
+ const id=existing?Number(existing):null;
+ const oldEvent=id?events.find(v=>Number(v.id)===id):null;
+ let tripId=eventTripEdit.value?Number(eventTripEdit.value):null;
  const picked=!existing?selectedCalendarDates():[];
  const multi=!existing&&picked.length>1;
  const startDate=multi?picked[0]:eventDateEdit.value;
  const endDate=multi?picked.at(-1):(eventEndDateEdit.value||startDate);
  if(endDate<startDate){showFormError("eventFormPublic","마지막 복귀 일자는 시작 일자보다 빠를 수 없습니다.");return;}
+ const targetDates=multi?picked:calendarDateSequence(startDate,endDate);
  const basePayload={
   trip_id:tripId,
   category:eventCategoryEdit.value.trim()||"일정",
@@ -1578,36 +1707,64 @@ eventFormPublic.onsubmit=async e=>{
   updated_at:new Date().toISOString()
  };
  try{
+  // 연결 여행이 없으면 달력 일정 자체를 하나의 여행으로 자동 생성합니다.
+  if(!tripId){
+    const autoTrip=await createCalendarAutoTrip(targetDates,basePayload);
+    tripId=Number(autoTrip.id);
+    basePayload.trip_id=tripId;
+    eventTripEdit.value=String(tripId);
+  }else{
+    const linkedTrip=trips.find(t=>Number(t.id)===Number(tripId));
+    if(linkedTrip&&isCalendarAutoTrip(linkedTrip)){
+      await updateCalendarAutoTrip(linkedTrip,targetDates,basePayload);
+    }
+  }
+
   if(id&&id>0){
-    const p={...basePayload,event_date:startDate,start_date:startDate,end_date:endDate};
+    const previousTripId=oldEvent?.trip_id?Number(oldEvent.trip_id):null;
+    const p={...basePayload,trip_id:tripId,event_date:startDate,start_date:startDate,end_date:endDate};
     const saved=await apiData("travel_events","PUT",p,id);
     localDelete("events",id);if(saved)localUpsert("events",saved);
-    if(tripId)await syncCalendarEventToTravelRecords(tripId,calendarDateSequence(startDate,endDate),p);
+    await syncCalendarEventToTravelRecords(tripId,targetDates,p);
+    if(previousTripId&&previousTripId!==tripId)await deleteCalendarAutoTripIfUnused(previousTripId,id);
     selectedDates.clear();selectedDates.add(startDate);selectedDate=startDate;lastCalendarAnchor=startDate;
   }else if(multi){
     for(const date of picked){
-      const p={...basePayload,event_date:date,start_date:date,end_date:date};
+      const p={...basePayload,trip_id:tripId,event_date:date,start_date:date,end_date:date};
       const saved=await apiData("travel_events","POST",p);
       if(saved)localUpsert("events",saved);
     }
     await syncCalendarEventToTravelRecords(tripId,picked,basePayload);
     selectedDate=picked.at(-1);lastCalendarAnchor=selectedDate;
   }else{
-    const p={...basePayload,event_date:startDate,start_date:startDate,end_date:endDate};
+    const p={...basePayload,trip_id:tripId,event_date:startDate,start_date:startDate,end_date:endDate};
     const saved=await apiData("travel_events","POST",p);
     if(saved)localUpsert("events",saved);
-    await syncCalendarEventToTravelRecords(tripId,calendarDateSequence(startDate,endDate),p);
+    await syncCalendarEventToTravelRecords(tripId,targetDates,p);
     selectedDates.clear();selectedDates.add(startDate);selectedDate=startDate;lastCalendarAnchor=startDate;
   }
   closeModal("eventModal");
-  toast(existing?"일정이 수정·동기화되었습니다.":multi?`선택한 ${picked.length}개 날짜에 일정이 저장·반영되었습니다.`:"일정이 저장되고 여행 기록에 반영되었습니다.");
+  toast(existing
+    ?"일정과 연결 여행이 함께 수정되었습니다."
+    :multi?`선택한 ${picked.length}개 날짜가 달력·지역별 일정·다가오는 여행에 연동되었습니다.`
+    :"일정이 달력·지역별 일정·다가오는 여행에 연동되었습니다.");
   await loadAll();
  }catch(err){showFormError("eventFormPublic",err)}
 }
 deleteEventBtn.onclick=async()=>{
  const id=Number(eventEditId.value);if(!id||!confirm("이 일정을 삭제하시겠습니까?"))return;
- try{if(id>0)await apiData("travel_events","DELETE",null,id);localDelete("events",id);closeModal("eventModal");toast("일정이 삭제·동기화되었습니다.");await loadAll()}catch(err){showFormError("eventFormPublic",err)}
+ const row=events.find(v=>Number(v.id)===id);
+ const tripId=row?.trip_id?Number(row.trip_id):null;
+ try{
+   if(id>0)await apiData("travel_events","DELETE",null,id);
+   localDelete("events",id);
+   if(tripId)await deleteCalendarAutoTripIfUnused(tripId,id);
+   closeModal("eventModal");
+   toast("일정이 삭제·동기화되었습니다.");
+   await loadAll();
+ }catch(err){showFormError("eventFormPublic",err)}
 }
+
 
 /* 예산 CRUD */
 function resetBudgetForm(){budgetFormPublic.reset();budgetEditId.value="";deleteBudgetBtn.hidden=true;budgetModalTitle.textContent="예산 추가"}
