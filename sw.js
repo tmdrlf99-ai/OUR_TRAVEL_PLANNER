@@ -1,4 +1,4 @@
-const CACHE_NAME="our-travel-planner-v1-0-0";
+const CACHE_NAME="our-travel-planner-v1-0-3-region-count";
 const APP_SHELL=[
   "/",
   "/index.html",
