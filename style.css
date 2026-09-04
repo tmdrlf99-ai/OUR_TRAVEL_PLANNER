@@ -141,12 +141,24 @@ body{font-size:17px!important}
   font-size:14px!important;
 }
 
-/* 사이드 예정여행 문구 한 줄 */
-.next-trip strong,.next-trip p,.empty-mini{
+/* 사이드 예정여행 문구: 좁은 카드에서도 자연스럽게 줄바꿈 */
+.next-trip strong,.next-trip p{
+  white-space:normal;
+  word-break:keep-all;
+  overflow-wrap:break-word;
+}
+.empty-mini{
   white-space:nowrap;
 }
-.next-trip{overflow:visible}
-.next-trip p{line-height:1.35}
+.next-trip{
+  overflow:hidden;
+}
+.next-trip strong{
+  line-height:1.4;
+}
+.next-trip p{
+  line-height:1.35;
+}
 
 /* 달력 요일 색상 */
 .week span:first-child{color:#d94b4b!important;font-weight:800}
