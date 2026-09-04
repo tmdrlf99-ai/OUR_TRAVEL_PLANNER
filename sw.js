@@ -1,4 +1,4 @@
-const CACHE_NAME="our-travel-planner-v1-0-4-linked-calendar";
+const CACHE_NAME="our-travel-planner-v1-0-5-calendar-label";
 const APP_SHELL=[
   "/",
   "/index.html",

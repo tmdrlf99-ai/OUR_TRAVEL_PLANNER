@@ -1012,12 +1012,20 @@ function compactPlaceLocation(x){
 function calendarLocationLabels(k){
  const labels=[];
  const add=value=>{const v=String(value||"").trim();if(v&&!labels.includes(v))labels.push(v)};
+
+ // 1) 여행/방문지의 지역명이 있으면 위치명을 가장 우선 표시합니다.
  trips.filter(x=>tripOnDate(x,k)).forEach(x=>add(compactTripLocation(x)));
  places.filter(x=>placeOnDate(x,k)).forEach(x=>add(compactPlaceLocation(x)));
- events.filter(x=>eventOnDate(x,k)&&x.trip_id).forEach(event=>{
-  const trip=trips.find(x=>String(x.id)===String(event.trip_id));
-  if(trip)add(compactTripLocation(trip));
+
+ // 2) 달력 일정도 반드시 날짜 칸에 글자로 표시합니다.
+ // 연결 여행에 지역정보가 있으면 "경북 · 포항"처럼 표시하고,
+ // 지역정보가 없으면 일정 제목(예: 포항투어)을 대신 표시합니다.
+ events.filter(x=>eventOnDate(x,k)).forEach(event=>{
+  const trip=event.trip_id?trips.find(x=>String(x.id)===String(event.trip_id)):null;
+  const location=trip?compactTripLocation(trip):"";
+  add(location||event.title);
  });
+
  return labels;
 }
 function calendarHoverItems(k){
