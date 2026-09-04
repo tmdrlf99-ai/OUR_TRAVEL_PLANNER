@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Our Travel Planner</title>
+  <meta name="theme-color" content="#258e75"/>
+  <meta name="application-name" content="OUR TRAVEL PLANNER"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="TRAVEL"/>
+  <link rel="manifest" href="/manifest.webmanifest"/>
+  <link rel="shortcut icon" href="/favicon.ico"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png"/>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"/>
+</head>
+<body>
+<section id="siteAuthGate" class="site-auth-gate">
+  <div class="site-auth-card">
+    <div class="site-auth-mark">✦</div>
+    <span class="site-auth-eyebrow">OUR TRAVEL PLANNER</span>
+    <h1>여행 기록 열기</h1>
+    <p>우리 둘의 여행 기록입니다.<br>비밀번호를 입력해 주세요.</p>
+    <form id="siteAuthForm" autocomplete="off">
+      <label for="siteAuthPassword">비밀번호</label>
+      <div class="site-auth-input-row">
+        <input id="siteAuthPassword" type="password" inputmode="numeric" maxlength="20"
+               autocomplete="current-password" placeholder="비밀번호 입력" required/>
+        <button type="submit">열기</button>
+      </div>
+      <small id="siteAuthMessage" aria-live="polite"></small>
+    </form>
+  </div>
+</section>
+
+<div class="app-shell" id="appShell" hidden>
+  <aside class="sidebar">
+    <a class="brand" href="#home">
+      <div class="brand-mark">✦</div>
+      <div><strong>TRAVEL NOTE</strong><span>MY JOURNEY PLANNER</span></div>
+    </a>
+
+    <span class="side-caption">여행 관리</span>
+    <nav class="nav">
+      <a href="#home" class="active" data-target="home"><b>🏠</b><span>홈</span></a>
+      <a href="#calendar" data-target="calendar"><b>📅</b><span>여행 달력</span></a>
+      <a href="#korea" data-target="korea"><b>🗺️</b><span>국내 지도</span></a>
+      <a href="#world" data-target="world"><b>🌏</b><span>세계 지도</span></a>
+      <a href="#places" data-target="places"><b>📍</b><span>방문지 관리</span></a>
+      <a href="#board" data-target="board"><b>📝</b><span>지역별 일정</span></a>
+      <a href="#budget" data-target="budget"><b>💰</b><span>예산</span></a>
+    </nav>
+
+    <div class="next-trip">
+      <span>NEXT TRIP</span>
+      <strong id="sideNextTrip">아직 예정 여행이 없습니다</strong>
+      <p id="sideNextDates">새 여행을 등록해 보세요.</p>
+      <small id="sideNextDday">READY</small>
+    </div>
+  </aside>
+
+  <div class="page">
+    <header class="topbar">
+      <div class="topbar-copy"><i></i><span>여행의 시작부터 기록까지, 한 곳에서.</span></div>
+      <div class="top-actions">
+        <button id="siteLogoutBtn" class="site-lock-btn" type="button" title="사이트 잠금">🔒 잠금</button>
+        <button id="openTripCreate" class="primary-btn">+ 새 여행</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="home" class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow">OUR TRAVEL PLANNER</span>
+          <h1>다음 여행을<br><em>더 즐겁게 준비하세요.</em></h1>
+          <p>달력, 지도, 일정, 예산을 한 화면에서 관리하고 함께한 여행을 우리만의 기록으로 남겨보세요.</p>
+
+          <div class="hero-search">
+            <span>⌕</span>
+            <input id="globalSearch" placeholder="도시, 국가, 여행명을 검색해 보세요"/>
+            <button id="globalSearchBtn">검색</button>
+          </div>
+          <div class="hero-tags"><span># 국내여행</span><span># 해외여행</span><span># 가족여행</span><span># 맛집</span></div>
+        </div>
+
+        <div class="hero-summary">
+          <span>TRAVEL SUMMARY</span>
+          <h3>올해의 여행 기록</h3>
+          <div class="summary-stats">
+            <div><b id="statTrips">0</b><small>등록 여행</small></div>
+            <div><b id="statCities">0</b><small>방문 지역</small></div>
+            <div><b id="statCountries">0</b><small>방문 국가</small></div>
+          </div>
+          <div class="summary-budget">
+            <div><span>전체 여행 예산</span><b id="heroBudget">₩0</b></div>
+            <div class="progress"><i id="budgetProgress"></i></div>
+            <small id="heroBudgetDetail">지출 ₩0 / 0%</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="quick-grid">
+        <a href="#calendar"><div class="quick-icon sky">📅</div><div><small>일정 한눈에</small><strong>여행 달력</strong><p>출발·귀국·예약 일정 확인</p></div></a>
+        <a href="#korea"><div class="quick-icon mint">🗺️</div><div><small>국내 여행기록</small><strong>국내 지도</strong><p>방문 지역과 계획을 지도에서 확인</p></div></a>
+        <a href="#world"><div class="quick-icon peach">🌏</div><div><small>해외 여행기록</small><strong>세계 지도</strong><p>방문 국가와 버킷리스트 관리</p></div></a>
+        <a href="#board"><div class="quick-icon mint">📝</div><div><small>지역별 여행계획</small><strong>지역별 일정</strong><p>여행지별 일정과 메모 관리</p></div></a>
+        <a href="#budget"><div class="quick-icon lemon">💰</div><div><small>여행비 관리</small><strong>예산</strong><p>예산과 실제 지출을 한눈에</p></div></a>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="card">
+          <div class="card-head"><div><span>UPCOMING</span><h2>다가오는 여행</h2></div><b>TRIP</b></div>
+          <div id="upcomingTrips" class="trip-list"></div>
+        </article>
+        <article class="card">
+          <div class="card-head"><div><span>BUDGET</span><h2>예산 요약</h2></div><b>ALL</b></div>
+          <div id="budgetMini" class="budget-mini"></div>
+        </article>
+      </section>
+
+      <section id="calendar" class="panel section">
+        <div class="section-head section-head-actions"><div><span>TRAVEL CALENDAR</span><h2>여행 달력</h2><p>여행·예약·숙박·이동 일정을 월별로 확인합니다.</p></div><button id="openEventCreate" class="soft-action">+ 일정 추가</button></div>
+        <div class="calendar-toolbar">
+          <button id="prevMonth">‹</button><strong id="monthTitle"></strong><button id="nextMonth">›</button><button id="todayMonth" class="subtle-btn">현재 월</button>
+        </div>
+        <div class="calendar-layout">
+          <div class="calendar-card">
+            <div class="week"><span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span></div>
+            <div id="calendarGrid" class="calendar-grid"></div>
+          </div>
+          <aside class="day-panel">
+            <div class="day-head"><div><span>DAY PLAN</span><h3 id="dayTitle">월 전체 일정</h3></div><div class="day-head-actions"><button id="monthOverviewBtn" type="button" class="month-overview-btn" hidden>월 전체</button><b id="dayCount">0건</b></div></div>
+            <div id="dayEvents" class="day-events"></div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="korea" class="panel section">
+        <div class="section-head"><span>KOREA MAP</span><h2>국내 여행 지도</h2><p>시·도 영역을 색상으로 확인하고, 지도를 클릭해 시·군/구별 방문·버킷리스트 기록을 살펴봅니다.</p></div>
+        <div class="map-layout">
+          <div id="koreaRealMap" class="korea-real-map" aria-label="대한민국 실제 지도"></div>
+<div class="map-info">
+            <span>REGION</span><h3 id="koreaRegion">지역을 선택해 주세요</h3>
+            <p id="koreaDesc">지도에서 시·도 영역을 선택하면 해당 지역의 시·군/구별 여행 기록을 보여드립니다.</p>
+            <div id="koreaTripList" class="mini-trip-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="world" class="panel section">
+        <div class="section-head"><span>WORLD MAP</span><h2>세계 여행 지도</h2><p>국가별 방문·버킷리스트 상태를 색상으로 확인하고, 국가를 클릭해 여행 기록을 살펴봅니다.</p></div>
+        <div class="world-layout">
+          <div id="worldRealMap" class="world-real-map" aria-label="세계 실제 지도"></div>
+          <div class="map-info">
+            <span>COUNTRY / CITIES</span><h3 id="worldCountry">국가를 선택해 주세요</h3>
+            <p id="worldDesc">지도에서 국가 영역을 선택하면 해당 국가의 도시·여행 기록을 보여드립니다.</p>
+            <div id="worldTripList" class="mini-trip-list"></div>
+          </div>
+        </div>
+      </section>
+
+
+      <section id="places" class="panel section">
+        <div class="section-head section-head-actions">
+          <div>
+            <span>PLACE MANAGER</span>
+            <h2>방문지 관리</h2>
+            <p>국내·해외 방문지와 버킷리스트를 직접 등록하면 지도에 반영됩니다.</p>
+          </div>
+          <button id="openPlaceCreate" class="soft-action">+ 방문지 등록</button>
+        </div>
+
+        <div class="place-summary-grid">
+          <div><span>국내 방문</span><strong id="domesticVisitedCount">0</strong></div>
+          <div><span>국내 버킷</span><strong id="domesticBucketCount">0</strong></div>
+          <div><span>해외 방문</span><strong id="overseasVisitedCount">0</strong></div>
+          <div><span>해외 버킷</span><strong id="overseasBucketCount">0</strong></div>
+        </div>
+
+        <div class="place-tools">
+          <select id="placeTypeFilter">
+            <option value="">국내·해외 전체</option>
+            <option value="국내">국내</option>
+            <option value="해외">해외</option>
+          </select>
+          <select id="placeStatusFilter">
+            <option value="">방문·버킷 전체</option>
+            <option value="방문">방문</option>
+            <option value="버킷리스트">버킷리스트</option>
+          </select>
+          <input id="placeSearch" placeholder="방문지 검색"/>
+        </div>
+        <div id="placeList" class="place-list"></div>
+      </section>
+
+      <section id="board" class="panel section">
+        <div class="section-head section-head-actions"><div><span>TRIP BOARD</span><h2>지역별 일정</h2><p>여행지별 상세 일정과 메모를 관리합니다.</p></div><button id="openTripCreate2" class="soft-action">+ 여행 추가</button></div>
+        <div class="board-tools">
+          <input id="boardSearch" placeholder="도시·국가·여행명 검색"/>
+          <select id="boardType"><option value="">전체</option><option>국내</option><option>해외</option></select>
+          <select id="boardStatus"><option value="">전체 상태</option><option>예정</option><option>완료</option><option>버킷리스트</option></select>
+        </div>
+        <div id="tripBoard" class="trip-board"></div>
+      </section>
+
+      <section id="budget" class="panel section">
+        <div class="section-head section-head-actions"><div><span>TRAVEL BUDGET</span><h2>여행 예산</h2><p>여행별 예산과 실제 지출을 항목별로 비교합니다.</p></div><button id="openBudgetCreate" class="soft-action">+ 예산 추가</button></div>
+
+        <div class="budget-filter">
+          <label>여행 선택</label>
+          <select id="budgetTripSelect"></select>
+        </div>
+
+        <div class="budget-summary-grid">
+          <div><span>총 예산</span><strong id="budgetTotal">₩0</strong></div>
+          <div><span>현재 지출</span><strong id="budgetSpent">₩0</strong></div>
+          <div><span>남은 예산</span><strong id="budgetRemain">₩0</strong></div>
+          <div><span>사용률</span><strong id="budgetRate">0%</strong></div>
+        </div>
+
+        <div id="budgetTable" class="budget-table"></div>
+      </section>
+    </main>
+
+    <footer><strong>OUR TRAVEL PLANNER</strong><span>Together · Explore · Remember</span></footer>
+  </div>
+</div>
+
+
+<div id="editorBackdrop" class="editor-backdrop" hidden></div>
+
+<section id="tripModal" class="editor-modal" hidden>
+  <div class="modal-head"><div><span>TRIP EDITOR</span><h3 id="tripModalTitle">여행 추가</h3></div><button class="modal-close" data-close="tripModal">×</button></div>
+  <form id="tripFormPublic">
+    <input id="tripEditId" type="hidden"/>
+    <div class="two-col">
+      <label>구분<select id="tripTypeEdit"><option>국내</option><option>해외</option></select></label>
+      <label>상태<select id="tripStatusEdit"><option>예정</option><option>완료</option><option>버킷리스트</option></select></label>
+    </div>
+    <label>여행명<input id="tripTitleEdit" required placeholder="예: 제주도 가족여행"/></label>
+    <div class="two-col">
+      <label>시작일<input id="tripStartEdit" type="date"/></label>
+      <label>종료일<input id="tripEndEdit" type="date"/></label>
+    </div>
+    <div class="two-col">
+      <label id="tripRegionWrap">국내 지역
+        <input id="tripRegionSearch" class="location-search" type="search" autocomplete="off" placeholder="시·도 검색"/>
+        <select id="tripRegionEdit"></select>
+      </label>
+      <label id="tripCityWrap"><span id="tripCityLabel">도시</span>
+        <input id="tripCitySearch" class="location-search" type="search" autocomplete="off" placeholder="도시·군·구 검색"/>
+        <select id="tripCityEdit"></select>
+      </label>
+    </div>
+    <label id="tripCountryWrap">국가
+      <input id="tripCountrySearch" class="location-search" type="search" autocomplete="off" placeholder="국가 검색 (예: 일본, Japan)"/>
+      <select id="tripCountryEdit"></select>
+    </label>
+    <label>작성자명<input id="tripAuthorEdit" required placeholder="예: 홍길동"/></label>
+    <label>메모<textarea id="tripMemoEdit" placeholder="숙소, 맛집, 준비물 등"></textarea></label>
+    <div class="modal-actions">
+      <button type="button" id="deleteTripBtn" class="danger-btn" hidden>삭제</button>
+      <div></div>
+      <button type="button" class="ghost-action" data-close="tripModal">취소</button>
+      <button class="save-action">저장</button>
+    </div>
+  </form>
+</section>
+
+<section id="eventModal" class="editor-modal" hidden>
+  <div class="modal-head"><div><span>DAY PLAN</span><h3 id="eventModalTitle">일정 추가</h3></div><button class="modal-close" data-close="eventModal">×</button></div>
+  <form id="eventFormPublic">
+    <input id="eventEditId" type="hidden"/>
+    <label>연결 여행<select id="eventTripEdit"></select></label>
+    <div class="two-col">
+      <label>시작 일자<input id="eventDateEdit" type="date" required/></label>
+      <label>복귀 일자<input id="eventEndDateEdit" type="date" required/></label>
+    </div>
+    <label>구분<input id="eventCategoryEdit" value="일정" placeholder="예: 여행, 관광, 이동, 식사"/></label>
+    <label>일정 제목<input id="eventTitleEdit" required/></label>
+    <label>작성자명<input id="eventAuthorEdit" required/></label>
+    <label>설명<textarea id="eventDescEdit"></textarea></label>
+    <div class="modal-actions">
+      <button type="button" id="deleteEventBtn" class="danger-btn" hidden>삭제</button>
+      <div></div>
+      <button type="button" class="ghost-action" data-close="eventModal">취소</button>
+      <button class="save-action">저장</button>
+    </div>
+  </form>
+</section>
+
+<section id="budgetModal" class="editor-modal" hidden>
+  <div class="modal-head"><div><span>BUDGET EDITOR</span><h3 id="budgetModalTitle">예산 추가</h3></div><button class="modal-close" data-close="budgetModal">×</button></div>
+  <form id="budgetFormPublic">
+    <input id="budgetEditId" type="hidden"/>
+    <label>여행<select id="budgetTripEdit"></select></label>
+    <label>항목<select id="budgetCategoryEdit"><option>교통</option><option>숙박</option><option>식비</option><option>관광·쇼핑</option><option>기타</option></select></label>
+    <div class="two-col">
+      <label>예산<input id="budgetAmountEdit" type="number" min="0"/></label>
+      <label>실제 지출<input id="budgetSpentEdit" type="number" min="0"/></label>
+    </div>
+    <label>작성자명<input id="budgetAuthorEdit" required/></label>
+    <div class="modal-actions">
+      <button type="button" id="deleteBudgetBtn" class="danger-btn" hidden>삭제</button>
+      <div></div>
+      <button type="button" class="ghost-action" data-close="budgetModal">취소</button>
+      <button class="save-action">저장</button>
+    </div>
+  </form>
+</section>
+
+
+<section id="placeModal" class="editor-modal" hidden>
+  <div class="modal-head">
+    <div><span>PLACE EDITOR</span><h3 id="placeModalTitle">방문지 등록</h3></div>
+    <button class="modal-close" data-close="placeModal">×</button>
+  </div>
+  <form id="placeFormPublic">
+    <input id="placeEditId" type="hidden"/>
+    <div class="two-col">
+      <label>구분
+        <select id="placeTypeEdit">
+          <option value="국내">국내</option>
+          <option value="해외">해외</option>
+        </select>
+      </label>
+      <label>상태
+        <select id="placeStatusEdit">
+          <option value="방문">방문</option>
+          <option value="버킷리스트">버킷리스트</option>
+        </select>
+      </label>
+    </div>
+    <label id="placeRegionWrap">시·도 / 국가
+      <input id="placeNameSearch" class="location-search" type="search" autocomplete="off" placeholder="시·도 또는 국가 검색"/>
+      <select id="placeNameEdit"></select>
+    </label>
+    <div id="placeCityWrap" class="multi-city-field">
+      <div class="multi-city-label-row">
+        <span id="placeCityLabel">도시·군·구</span>
+        <div class="multi-city-actions">
+          <button type="button" id="placeCitySelectAll" class="mini-text-btn">전체 선택</button>
+          <button type="button" id="placeCityClear" class="mini-text-btn">전체 해제</button>
+        </div>
+      </div>
+      <div class="location-search-pair">
+        <input id="placeCitySearch" class="location-search" type="search" autocomplete="off" placeholder="도시·지역 검색 또는 직접 입력"/>
+        <select id="placeCityDropdown" aria-label="도시·지역 드롭박스 선택"><option value="">도시·지역 드롭박스 선택</option></select>
+      </div>
+      <div id="placeCityEdit" class="multi-city-grid" role="group" aria-label="방문 도시·지역 복수 선택"></div>
+      <small class="multi-city-help">검색 또는 드롭박스로 선택할 수 있으며 여러 지역은 복수 선택할 수 있습니다.</small>
+    </div>
+    <div class="two-col">
+      <label>방문/계획일<input id="placeStartEdit" type="date" required/></label>
+      <label>종료일<input id="placeEndEdit" type="date"/></label>
+    </div>
+    <label>작성자명<input id="placeAuthorEdit" required placeholder="예: 홍길동"/></label>
+    <label>메모<textarea id="placeMemoEdit" placeholder="언제 갔는지, 가고 싶은 이유 등"></textarea></label>
+    <div class="modal-actions">
+      <button type="button" id="deletePlaceBtn" class="danger-btn" hidden>삭제</button>
+      <div></div>
+      <button type="button" class="ghost-action" data-close="placeModal">취소</button>
+      <button class="save-action">저장</button>
+    </div>
+  </form>
+</section>
+
+<button id="installPwaBtn" class="pwa-install-btn" type="button" hidden>📲 앱 설치</button>
+<div id="toast" class="toast" hidden></div>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script src="pwa.js"></script>
+</body>
+</html>
